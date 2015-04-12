@@ -2,7 +2,6 @@ import Data.Ord
 import Data.List
 import Data.List.Split
 import Data.Function (on)
-import Data.Set (Set)
 import qualified Data.Set as S
 import System.Random
 
@@ -22,8 +21,12 @@ type Shuffled = [Card]
 type IntCardTuple = (Int, Card)
 type Suggestion = (Card, Card, Card)
 
--- data PlayerModel = { Cards, Cards', SuggestionsSatisfied, SuggestionsPassed }
--- emptyPlayer = PlayerModel { [], [], [], [] }
+data PlayerModel = PlayerModel {  cs :: [Card]
+								, cs' :: [Card]
+								, ss :: [Suggestion]
+								, ss' :: [Suggestion] } deriving (Show)
+
+emptyPlayer = PlayerModel { cs = [], cs' = [], ss = [], ss' = [] }
 
 shuffle :: [a] -> [a]
 shuffle as = snd $ unzip slist
@@ -40,20 +43,32 @@ deal deck n = map (map snd) $ groupBy ((==) `on` fst) $ sortBy (comparing fst) t
 	where
 		ts = zip (cycle [1..n]) deck
 
-makeSuggestion :: Suggestion -> Hand -> Bool
-makeSuggestion (s,w,p) h = (s `elem` h) || (w `elem` h) || (p `elem` h)
+testSuggestion :: Suggestion -> Hand -> Bool
+testSuggestion (s,w,p) h = or bools
+	where
+		asList = [s,w,p]
+		bools = map (flip elem asList) h
 
--- getPlayers :: Int -> [PlayerModel]
--- getPlayers n = repeat n emptyPlayer
+getPlayers :: Int -> [PlayerModel]
+getPlayers n = take n $ repeat emptyPlayer
+
+rounds :: [Hand] -> [Hand]
+rounds hs = cycle hs
 
 -- | Globals 
-n = 4 -- number of players
 d = allCards
 s = shuffleDeck d
-hs = deal s n
 
-rounds = cycle hs -- | infinite list 
+-- | useful for debugging
+--foo = head suggestions
+--bar = head hs
+--hs = deal s n
+
+readAInt :: IO Int
+readAInt = readLn
+
 
 main = do
-	print hs
-	print "hello world of sets"
+	putStrLn "How many players?"
+	n <- readAInt -- number of players
+	print $ deal s n
