@@ -135,6 +135,6 @@ main = do
     let mc = murderCards s
     let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
-    let results = makeSuggestion (head suggestions) hs
+    let results = makeSuggestion (head suggestions) hs  -- not hs but hs-without-suggester
     interpret results ps 
     print "all done!"
