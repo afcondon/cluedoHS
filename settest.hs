@@ -21,18 +21,18 @@ type Shuffled = [Card]
 type IntCardTuple = (Int, Card)
 type Suggestion = (Card, Card, Card)
 type PlayerID = Int
+data Ownership = Unknown | PlayerID Int | Noone
 
-data CardOwner = Noone | PlayerID Int | Unknown
-data CardInfo = CardInfo { c :: Card, v :: CardOwner, eliminated :: [PlayerID]}
-type CardKB = [CardInfo] -- really this should be a Map from Card to CardInfo?
+type Fact = (Card, Ownership)
 
-data PlayerInfo = PlayerKB { ss :: [Suggestion], ss' :: [Suggestion] } deriving (Show)
-type PlayerKB = [PlayerInfo] -- should be a Map from PlayerID to PlayerInfo
+{-
+    The idea is to make this a State Monad 
 
-initCardKB :: Shuffled -> Int -> CardKB
-initCardKB s n = [CardInfo {c = card, v = Unknown, eliminated = [] }  | card <- s]
-
-emptyPlayer = PlayerInfo { ss = [], ss' = [] }
+    Knowledge:
+        Map from Card to Ownership
+        Map from PID -> Set of Suggestions Matched
+        Map from PID -> Set of Suggestions Passed
+-}
 
 -- | generic functions
 
@@ -52,8 +52,8 @@ shuffleDeck d = shuffle d
 murderCards :: Shuffled -> Suggestion
 murderCards s = head $ [(ss,sw,sp) | ss <- s, sw <- s, sp <- s, ss `elem` suspectCards, sw `elem` weaponCards, sp `elem` placeCards]
 
-pruneSuggestionFromShuffled :: Suggestion -> Shuffled -> Shuffled
-pruneSuggestionFromShuffled (sc,wc,pc) s = filter (/= sc) $ filter (/= wc) $ filter (/= pc) s
+removeMurderCards :: Suggestion -> Shuffled -> Shuffled
+removeMurderCards (sc,wc,pc) s = filter (/= sc) $ filter (/= wc) $ filter (/= pc) s
 
 deal :: Shuffled -> Int -> [Hand]
 deal deck n = map (map snd) $ groupBy ((==) `on` fst) $ sortBy (comparing fst) ts
@@ -70,11 +70,12 @@ makeSuggestion :: Suggestion -> [Hand] -> [Bool]
 makeSuggestion _ [] = []
 makeSuggestion s (h:hs) = testSuggestion s h : makeSuggestion s hs
 
-getPlayers :: Int -> [PlayerModel]
-getPlayers n = take n $ repeat emptyPlayer
-
 rounds :: [Hand] -> [Hand]
 rounds hs = cycle hs
+
+initKB :: [Card] -> [Fact]
+initKB [] = []
+initKB (c:cs) = (c,Unknown) : initKB(cs)
 
 -- | Globals 
 d = allCards
@@ -99,17 +100,37 @@ s = shuffleDeck d
             KB[card] = (card, value, )
                 where
                     | 
+
+matched :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
+matched [] = []
+matched list
+    | matchExists = [] -- we have learned that this player matched this suggestion
+    | otherwise = [] -- possible murder card
+    where
+        last = tail list
+        matchExists = fst last
 -}
 
+learnFromPasses :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
+learnFromPasses s (hd:[]) = [] -- no information!
+learnFromPasses s (hd:tl) = [] -- these players passed on this suggestion
+
+learnFromMatch :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
+learnFromMatch s [] = _ -- none of the other players have any of these three cards (suggester could have any or all)
+learnFromMatch s ((True, pid):_) = _  -- this player has one of these cards
 
 
 main = do
     putStrLn "How many players?"
     n <- readAInt -- number of players
-    let ps = getPlayers n
+    let ps = [1..n] :: [PlayerID]
     let mc = murderCards s
-    let remainingCards = pruneSuggestionFromShuffled mc s
+    let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
     let results = makeSuggestion (head suggestions) hs
-    print results
-
+    let info = zip results ps
+    let passes = takeWhile (not . fst) info
+    let match = dropWhile (not . fst) info -- head, if present, is match
+    print info
+    print passes
+    print match
