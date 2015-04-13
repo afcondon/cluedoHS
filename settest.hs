@@ -21,6 +21,7 @@ type Shuffled = [Card]
 type IntCardTuple = (Int, Card)
 type Suggestion = (Card, Card, Card)
 type PlayerID = Int
+type SuggestionBy = (PlayerID, Suggestion)      -- actual suggestions are made by players
 data Ownership = Unknown | PlayerID Int | Noone
 
 type Fact = (Card, Ownership)
@@ -70,9 +71,6 @@ makeSuggestion :: Suggestion -> [Hand] -> [Bool]
 makeSuggestion _ [] = []
 makeSuggestion s (h:hs) = testSuggestion s h : makeSuggestion s hs
 
-rounds :: [Hand] -> [Hand]
-rounds hs = cycle hs
-
 initKB :: [Card] -> [Fact]
 initKB [] = []
 initKB (c:cs) = (c,Unknown) : initKB(cs)
@@ -109,7 +107,6 @@ matched list
     where
         last = tail list
         matchExists = fst last
--}
 
 learnFromPasses :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
 learnFromPasses s (hd:[]) = [] -- no information!
@@ -119,6 +116,17 @@ learnFromMatch :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
 learnFromMatch s [] = _ -- none of the other players have any of these three cards (suggester could have any or all)
 learnFromMatch s ((True, pid):_) = _  -- this player has one of these cards
 
+-}
+
+interpret :: [Bool] -> [PlayerID] -> IO ()
+interpret results ps = do
+    let info = zip results ps
+    let passes = takeWhile (not . fst) info
+    let match = dropWhile (not . fst) info -- head, if present, is match
+    print info
+    print passes
+    print match
+    
 
 main = do
     putStrLn "How many players?"
@@ -128,9 +136,5 @@ main = do
     let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
     let results = makeSuggestion (head suggestions) hs
-    let info = zip results ps
-    let passes = takeWhile (not . fst) info
-    let match = dropWhile (not . fst) info -- head, if present, is match
-    print info
-    print passes
-    print match
+    interpret results ps 
+    print "all done!"
