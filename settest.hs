@@ -1,42 +1,35 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 import Data.Ord
 import Data.List
 import Data.List.Split
 import Data.Function (on)
-import qualified Data.Set as S
 import System.Random
+import qualified Data.Map.Strict as M
+import qualified Data.Set as S
 
-data Card = MS | CM | MW | RG | MP | PP | Ck | Dg | Lp | Rp | Sp | Kn | Bl | Cn | Dr | Br | Lb | Lg | Hl | Sy deriving (Eq, Enum, Show, Ord)
+import Text.PrettyPrint.GenericPretty
 
 -- | define the cards in the deck
-suspectCards = [MS .. PP]
-weaponCards = [Ck .. Sp]
-placeCards = [Kn .. Sy]
--- | full deck
-allCards = [MS .. Sy]
-suggestions = [(s,w,p) | s <- suspectCards, w <- weaponCards, p <- placeCards]
-
+-------------------------------------------------------------------------------
+data Card = MS | CM | MW | RG | MP | PP | Ck | Dg | Lp | Rp | Sp | Kn | Bl | Cn | Dr | Br | Lb | Lg | Hl | Sy deriving (Eq, Enum, Show, Ord)
+type Suggestion = (Card, Card, Card) -- constrained to be (s,w,p)
 type Hand = [Card]
 type Deck = [Card]
 type Shuffled = [Card]
 type IntCardTuple = (Int, Card)
-type Suggestion = (Card, Card, Card)
 type PlayerID = Int
-type SuggestionBy = (PlayerID, Suggestion)      -- actual suggestions are made by players
-data Ownership = Unknown | PlayerID Int | Noone
+type SuggestionBy = (PlayerID, Suggestion) -- actual suggestions are made by players
 
-type Fact = (Card, Ownership)
-
-{-
-    The idea is to make this a State Monad 
-
-    Knowledge:
-        Map from Card to Ownership
-        Map from PID -> Set of Suggestions Matched
-        Map from PID -> Set of Suggestions Passed
--}
+suspectCards = [MS .. PP]
+weaponCards = [Ck .. Sp]
+placeCards = [Kn .. Sy]
+allCards = [MS .. Sy] -- | full deck
+suggestions = [(s,w,p) | s <- suspectCards, w <- weaponCards, p <- placeCards]
+-------------------------------------------------------------------------------
 
 -- | generic functions
-
+-------------------------------------------------------------------------------
 shuffle :: [a] -> [a]
 shuffle as = snd $ unzip slist
     where
@@ -71,70 +64,76 @@ makeSuggestion :: Suggestion -> [Hand] -> [Bool]
 makeSuggestion _ [] = []
 makeSuggestion s (h:hs) = testSuggestion s h : makeSuggestion s hs
 
-initKB :: [Card] -> [Fact]
-initKB [] = []
-initKB (c:cs) = (c,Unknown) : initKB(cs)
+-- core information used for deduction and tracking
+-------------------------------------------------------------------------------
+type CardSet = S.Set Card
+type SuggestionSet = S.Set Suggestion
+data Ownership = Unknown | Noone | PlayerID deriving (Show, Eq)
+
+type CardFacts = M.Map Card Ownership
+type PlayerCards = M.Map PlayerID CardSet
+type PlayerCards' = M.Map PlayerID CardSet
+type PlayerPassed = M.Map PlayerID SuggestionSet
+type PlayerMatched = M.Map PlayerID SuggestionSet
+
+data KB = KB { cf :: CardFacts
+             , pc :: PlayerCards
+             , pc' :: PlayerCards'
+             , pm :: PlayerMatched
+             , pm' :: PlayerPassed } deriving (Show, Eq, Generic)
+
+instance Out KB
+
+initCardFacts :: CardFacts
+initCardFacts = M.fromList (zip allCards (repeat Unknown))
+
+initCardSet :: CardSet
+initCardSet = S.empty
+
+initSuggestionSet :: SuggestionSet
+initSuggestionSet = S.empty
+
+initKB :: Int -> KB
+initKB n = KB { cf  = initCardFacts
+              , pc  = M.fromList $ zip [1..n] $ repeat initCardSet
+              , pc' = M.fromList $ zip [1..n] $ repeat initCardSet
+              , pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
+              , pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
+
+
+
+getPasses :: [(Bool, PlayerID)] -> [PlayerID]
+getPasses info = map snd $ takeWhile (not . fst) info
+
+getMatch :: [(Bool, PlayerID)] -> Maybe PlayerID
+getMatch [] = Nothing
+getMatch ((True, pid):_) = Just pid
+getMatch ((False, _):ps) = getMatch ps
+
+learnFromSuggestion :: [PlayerID] -> Maybe PlayerID -> IO ()
+learnFromSuggestion passes match = do
+    print passes
+    print match  
 
 -- | Globals 
+-------------------------------------------------------------------------------
 d = allCards
 s = shuffleDeck d
-
-{- 
-    Choose # of players
-    parameterize random generator -- deferred for now
-    Shuffle cards
-    Take solution out of pack
-    Deal hands out from remaining pack
-
-    repeatedly test suggestions until solution found ()
-    
-        try each suggestion against each player until you get true or end of list 
-        for each suggestion -> false add sugg' to player in question
-            for each card in suggestion player does not have it - add this to KB
-        for suggestion -> true (if any) add sugg to player
-            IFF player.cards' contains two of the cards in the suggestion then player has remaining card - add fact to KB
-
-        deduction:
-            KB[card] = (card, value, )
-                where
-                    | 
-
-matched :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
-matched [] = []
-matched list
-    | matchExists = [] -- we have learned that this player matched this suggestion
-    | otherwise = [] -- possible murder card
-    where
-        last = tail list
-        matchExists = fst last
-
-learnFromPasses :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
-learnFromPasses s (hd:[]) = [] -- no information!
-learnFromPasses s (hd:tl) = [] -- these players passed on this suggestion
-
-learnFromMatch :: Suggestion -> [(Bool, PlayerID)] -> [Fact]
-learnFromMatch s [] = _ -- none of the other players have any of these three cards (suggester could have any or all)
-learnFromMatch s ((True, pid):_) = _  -- this player has one of these cards
-
--}
-
-interpret :: [Bool] -> [PlayerID] -> IO ()
-interpret results ps = do
-    let info = zip results ps
-    let passes = takeWhile (not . fst) info
-    let match = dropWhile (not . fst) info -- head, if present, is match
-    print info
-    print passes
-    print match
-    
 
 main = do
     putStrLn "How many players?"
     n <- readAInt -- number of players
     let ps = [1..n] :: [PlayerID]
+    let kb = initKB n
     let mc = murderCards s
     let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
-    let results = makeSuggestion (head suggestions) hs  -- not hs but hs-without-suggester
-    interpret results ps 
+    let firstS = head suggestions
+    let results = makeSuggestion firstS hs  -- not hs but hs-without-suggester
+    let info = zip results ps
+    let passes = getPasses info
+    let match = getMatch info 
+    print info
+    print kb
+    learnFromSuggestion passes match
     print "all done!"
