@@ -7,8 +7,7 @@ import Data.Function (on)
 import System.Random
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
-
-import Text.PrettyPrint.GenericPretty
+import qualified Text.Show.Pretty as Pr
 
 -- | define the cards in the deck
 -------------------------------------------------------------------------------
@@ -80,9 +79,9 @@ data KB = KB { cf :: CardFacts
              , pc :: PlayerCards
              , pc' :: PlayerCards'
              , pm :: PlayerMatched
-             , pm' :: PlayerPassed } deriving (Show, Eq, Generic)
+             , pm' :: PlayerPassed } deriving (Show, Eq)
 
-instance Out KB
+--instance Out KB
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -134,6 +133,7 @@ main = do
     let passes = getPasses info
     let match = getMatch info 
     print info
-    print kb
+    putStrLn $ Pr.ppShow kb 
+    --print kb
     learnFromSuggestion passes match
     print "all done!"
