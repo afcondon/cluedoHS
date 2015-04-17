@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveGeneric #-}
 
 import Data.Ord
@@ -5,10 +6,54 @@ import Data.List
 import Data.List.Split
 import Data.Function (on)
 import System.Random
+import Control.Monad.Reader
+import Control.Monad.Writer
+import Control.Monad.State
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Text.Show.Pretty as Pr
 
+
+----------------------------------------
+type Stack   = [Int]
+type Output  = [Int]
+type Program = [Instr]
+
+type VM a = ReaderT Program (WriterT Output (State Stack)) a
+
+newtype Comp a = Comp { unComp :: VM a }
+  deriving (Functor, Applicative, Monad, MonadReader Program, MonadWriter Output, MonadState Stack)
+
+data Instr = Push Int | Pop | Puts
+
+evalInstr :: Instr -> Comp ()
+evalInstr instr = case instr of
+  Pop    -> modify tail
+  Push n -> modify (n:)
+  Puts   -> do
+    tos <- gets head
+    tell [tos]
+
+eval :: Comp ()
+eval = do
+  instr <- ask
+  case instr of
+    []     -> return ()
+    (i:is) -> evalInstr i >> local (const is) eval
+
+execVM :: Program -> Output
+execVM = flip evalState [] . execWriterT . runReaderT (unComp eval)
+
+program :: Program
+program = [
+     Push 42,
+     Push 27,
+     Puts,
+     Pop,
+     Puts,
+     Pop
+  ]
+---------------------------------------------------------------------
 -- | define the cards in the deck
 -------------------------------------------------------------------------------
 data Card = MS | CM | MW | RG | MP | PP | Ck | Dg | Lp | Rp | Sp | Kn | Bl | Cn | Dr | Br | Lb | Lg | Hl | Sy deriving (Eq, Enum, Show, Ord)
@@ -81,7 +126,15 @@ data KB = KB { cf :: CardFacts
              , pm :: PlayerMatched
              , pm' :: PlayerPassed } deriving (Show, Eq)
 
---instance Out KB
+type KBstate = State KB
+
+--updateKB :: KBstate Card Ownership
+--updateKB c o = do 
+--    st <- get
+--    let newCF = M.Map insert c o
+--    put st { cf = newCF, pc = pc}
+--    return l
+
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -98,8 +151,6 @@ initKB n = KB { cf  = initCardFacts
               , pc' = M.fromList $ zip [1..n] $ repeat initCardSet
               , pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
               , pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
-
-
 
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
@@ -120,6 +171,7 @@ d = allCards
 s = shuffleDeck d
 
 main = do
+    mapM_ print $ execVM program
     putStrLn "How many players?"
     n <- readAInt -- number of players
     let ps = [1..n] :: [PlayerID]
