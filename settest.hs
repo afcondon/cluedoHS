@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 
 import Data.Ord
@@ -9,6 +10,7 @@ import System.Random
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State
+import Control.Lens
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Text.Show.Pretty as Pr
@@ -112,7 +114,7 @@ makeSuggestion s (h:hs) = testSuggestion s h : makeSuggestion s hs
 -------------------------------------------------------------------------------
 type CardSet = S.Set Card
 type SuggestionSet = S.Set Suggestion
-data Ownership = Unknown | Noone | PlayerID deriving (Show, Eq)
+data Ownership = Unknown | Noone | ID PlayerID deriving (Show, Eq)
 
 type CardFacts = M.Map Card Ownership
 type PlayerCards = M.Map PlayerID CardSet
@@ -120,21 +122,18 @@ type PlayerCards' = M.Map PlayerID CardSet
 type PlayerPassed = M.Map PlayerID SuggestionSet
 type PlayerMatched = M.Map PlayerID SuggestionSet
 
-data KB = KB { cf :: CardFacts
-             , pc :: PlayerCards
-             , pc' :: PlayerCards'
-             , pm :: PlayerMatched
-             , pm' :: PlayerPassed } deriving (Show, Eq)
+data KB = KB { _cf :: CardFacts
+             , _pc :: PlayerCards
+             , _pc' :: PlayerCards'
+             , _pm :: PlayerMatched
+             , _pm' :: PlayerPassed } deriving (Show, Eq)
 
 type KBstate = State KB
 
---updateKB :: KBstate Card Ownership
---updateKB c o = do 
---    st <- get
---    let newCF = M.Map insert c o
---    put st { cf = newCF, pc = pc}
---    return l
+makeLenses ''KB
 
+playerHasCard :: PlayerID -> Card -> KB -> KB
+playerHasCard pid card kb = over cf (M.insert card (ID pid)) kb
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -146,32 +145,11 @@ initSuggestionSet :: SuggestionSet
 initSuggestionSet = S.empty
 
 initKB :: Int -> KB
-initKB n = KB { cf  = initCardFacts
-              , pc  = M.fromList $ zip [1..n] $ repeat initCardSet
-              , pc' = M.fromList $ zip [1..n] $ repeat initCardSet
-              , pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
-              , pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
-
--- getters and setters pending use of lenses or state transformers
-addCardFact :: (Card, Ownership) -> KB -> KB
-addCardFact (c, o) kb = KB { cf = cfN, pc = pcN, pc' = pc'N, pm = pmN, pm' = pm'N }
-    where
-        cfN = M.insert c o (cf kb)
-        pcN = pc kb
-        pc'N = pc' kb
-        pmN = pm kb
-        pm'N = pm' kb
-{-
-playerDoesNotHaveCard :: KB -> PlayerID -> Card -> KB
-playerDoesNotHaveCard kb pid card = KB { cf = cfN, pc = pcN, pc' = pc'N, pm = pmN, pm' = pm'N }
-    where
-        cfN = cf kb
-        csN = S.insert card (M.lookup pid (pc kb))
-        pcN = M.insert pid csN (pc kb) :: PlayerCards
-        pc'N = pc' kb
-        pmN = pm kb
-        pm'N = pm' kb
--}
+initKB n = KB { _cf  = initCardFacts
+              , _pc  = M.fromList $ zip [1..n] $ repeat initCardSet
+              , _pc' = M.fromList $ zip [1..n] $ repeat initCardSet
+              , _pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
+              , _pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
 
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
@@ -186,6 +164,10 @@ learnFromSuggestion kb (s,w,p) passes match = newKB
     where
         newKB = playerDoesNotHaveCard s (head passes)
 -}
+ppKB :: KB -> IO ()
+ppKB kb = do
+    putStrLn $ Pr.ppShow kb 
+    
 
 -- | Globals 
 -------------------------------------------------------------------------------
@@ -207,9 +189,8 @@ main = do
     let passes = getPasses info
     let match = getMatch info 
     print info
-    putStrLn $ Pr.ppShow kb 
-    let cfN = cf kb
-    let csn = M.lookup 1 (pc kb)
+    let cfN = _cf kb
+    let csn = M.lookup 1 (_pc kb)
     print csn
     let foo = case csn of Nothing -> initCardSet
                           (Just c) -> S.insert MS c
