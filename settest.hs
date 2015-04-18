@@ -152,6 +152,27 @@ initKB n = KB { cf  = initCardFacts
               , pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
               , pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
 
+-- getters and setters pending use of lenses or state transformers
+addCardFact :: (Card, Ownership) -> KB -> KB
+addCardFact (c, o) kb = KB { cf = cfN, pc = pcN, pc' = pc'N, pm = pmN, pm' = pm'N }
+    where
+        cfN = M.insert c o (cf kb)
+        pcN = pc kb
+        pc'N = pc' kb
+        pmN = pm kb
+        pm'N = pm' kb
+{-
+playerDoesNotHaveCard :: KB -> PlayerID -> Card -> KB
+playerDoesNotHaveCard kb pid card = KB { cf = cfN, pc = pcN, pc' = pc'N, pm = pmN, pm' = pm'N }
+    where
+        cfN = cf kb
+        csN = S.insert card (M.lookup pid (pc kb))
+        pcN = M.insert pid csN (pc kb) :: PlayerCards
+        pc'N = pc' kb
+        pmN = pm kb
+        pm'N = pm' kb
+-}
+
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
 
@@ -159,11 +180,12 @@ getMatch :: [(Bool, PlayerID)] -> Maybe PlayerID
 getMatch [] = Nothing
 getMatch ((True, pid):_) = Just pid
 getMatch ((False, _):ps) = getMatch ps
-
-learnFromSuggestion :: [PlayerID] -> Maybe PlayerID -> IO ()
-learnFromSuggestion passes match = do
-    print passes
-    print match  
+{-
+learnFromSuggestion :: KB -> Suggestion -> [PlayerID] -> Maybe PlayerID -> KB
+learnFromSuggestion kb (s,w,p) passes match = newKB
+    where
+        newKB = playerDoesNotHaveCard s (head passes)
+-}
 
 -- | Globals 
 -------------------------------------------------------------------------------
@@ -186,6 +208,12 @@ main = do
     let match = getMatch info 
     print info
     putStrLn $ Pr.ppShow kb 
+    let cfN = cf kb
+    let csn = M.lookup 1 (pc kb)
+    print csn
+    let foo = case csn of Nothing -> initCardSet
+                          (Just c) -> S.insert MS c
+    print foo
     --print kb
-    learnFromSuggestion passes match
+    -- learnFromSuggestion firstS passes match
     print "all done!"
