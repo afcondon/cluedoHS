@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 
 import Data.Ord
@@ -9,6 +10,7 @@ import System.Random
 import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State
+import Control.Lens
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import qualified Text.Show.Pretty as Pr
@@ -112,7 +114,7 @@ makeSuggestion s (h:hs) = testSuggestion s h : makeSuggestion s hs
 -------------------------------------------------------------------------------
 type CardSet = S.Set Card
 type SuggestionSet = S.Set Suggestion
-data Ownership = Unknown | Noone | PlayerID deriving (Show, Eq)
+data Ownership = Unknown | Noone | ID PlayerID deriving (Show, Eq)
 
 type CardFacts = M.Map Card Ownership
 type PlayerCards = M.Map PlayerID CardSet
@@ -120,21 +122,16 @@ type PlayerCards' = M.Map PlayerID CardSet
 type PlayerPassed = M.Map PlayerID SuggestionSet
 type PlayerMatched = M.Map PlayerID SuggestionSet
 
-data KB = KB { cf :: CardFacts
-             , pc :: PlayerCards
-             , pc' :: PlayerCards'
-             , pm :: PlayerMatched
-             , pm' :: PlayerPassed } deriving (Show, Eq)
+data KB = KB { _cf :: CardFacts
+             , _pc :: PlayerCards   -- Map Player -> Set of Cards held
+             , _pc' :: PlayerCards' -- Map Player -> Set of Cards _not_ held
+             , _pm :: PlayerMatched -- Map Player -> Set of Suggestions Matched
+             , _pm' :: PlayerPassed -- Map Player -> Set of Suggestions Passed
+             } deriving (Show, Eq)
 
 type KBstate = State KB
 
---updateKB :: KBstate Card Ownership
---updateKB c o = do 
---    st <- get
---    let newCF = M.Map insert c o
---    put st { cf = newCF, pc = pc}
---    return l
-
+makeLenses ''KB
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -146,11 +143,21 @@ initSuggestionSet :: SuggestionSet
 initSuggestionSet = S.empty
 
 initKB :: Int -> KB
-initKB n = KB { cf  = initCardFacts
-              , pc  = M.fromList $ zip [1..n] $ repeat initCardSet
-              , pc' = M.fromList $ zip [1..n] $ repeat initCardSet
-              , pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
-              , pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
+initKB n = KB { _cf  = initCardFacts
+              , _pc  = M.fromList $ zip [1..n] $ repeat initCardSet
+              , _pc' = M.fromList $ zip [1..n] $ repeat initCardSet
+              , _pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
+              , _pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
+
+playerHasCard :: PlayerID -> Card -> KB -> KB
+playerHasCard pid card kb = over cf (M.insert card oid) kb
+    where
+        oid = ID pid
+
+playersCardSet :: PlayerID -> KB -> CardSet
+playersCardSet pid kb = 
+    where
+        oid = ID pid
 
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
@@ -159,11 +166,20 @@ getMatch :: [(Bool, PlayerID)] -> Maybe PlayerID
 getMatch [] = Nothing
 getMatch ((True, pid):_) = Just pid
 getMatch ((False, _):ps) = getMatch ps
+{-
+learnFromSuggestion :: KB -> Suggestion -> [PlayerID] -> Maybe PlayerID -> KB
+learnFromSuggestion kb (s,w,p) passes match = newKB
+    where
+        newKB = playerDoesNotHaveCard s (head passes)
+-}
+ppKB :: KB -> IO ()
+ppKB kb = do
+    putStrLn $ Pr.ppShow kb 
 
-learnFromSuggestion :: [PlayerID] -> Maybe PlayerID -> IO ()
-learnFromSuggestion passes match = do
-    print passes
-    print match  
+autoAttack :: Actor -> Actor -> Actor
+autoAttack actor@(Actor {stats = stats@(StatsSystem {physicalDamage = p, health = h}})) =
+    actor {stats = stats { health = h - p } }
+ 
 
 -- | Globals 
 -------------------------------------------------------------------------------
@@ -185,7 +201,12 @@ main = do
     let passes = getPasses info
     let match = getMatch info 
     print info
-    putStrLn $ Pr.ppShow kb 
+    let cfN = _cf kb
+    let csn = M.lookup 1 (_pc kb)
+    print csn
+    let foo = case csn of Nothing -> initCardSet
+                          (Just c) -> S.insert MS c
+    print foo
     --print kb
-    learnFromSuggestion passes match
+    -- learnFromSuggestion firstS passes match
     print "all done!"
