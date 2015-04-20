@@ -123,17 +123,15 @@ type PlayerPassed = M.Map PlayerID SuggestionSet
 type PlayerMatched = M.Map PlayerID SuggestionSet
 
 data KB = KB { _cf :: CardFacts
-             , _pc :: PlayerCards
-             , _pc' :: PlayerCards'
-             , _pm :: PlayerMatched
-             , _pm' :: PlayerPassed } deriving (Show, Eq)
+             , _pc :: PlayerCards   -- Map Player -> Set of Cards held
+             , _pc' :: PlayerCards' -- Map Player -> Set of Cards _not_ held
+             , _pm :: PlayerMatched -- Map Player -> Set of Suggestions Matched
+             , _pm' :: PlayerPassed -- Map Player -> Set of Suggestions Passed
+             } deriving (Show, Eq)
 
 type KBstate = State KB
 
 makeLenses ''KB
-
-playerHasCard :: PlayerID -> Card -> KB -> KB
-playerHasCard pid card kb = over cf (M.insert card (ID pid)) kb
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -151,6 +149,16 @@ initKB n = KB { _cf  = initCardFacts
               , _pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
               , _pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
 
+playerHasCard :: PlayerID -> Card -> KB -> KB
+playerHasCard pid card kb = over cf (M.insert card oid) kb
+    where
+        oid = ID pid
+
+playersCardSet :: PlayerID -> KB -> CardSet
+playersCardSet pid kb = 
+    where
+        oid = ID pid
+
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
 
@@ -167,7 +175,11 @@ learnFromSuggestion kb (s,w,p) passes match = newKB
 ppKB :: KB -> IO ()
 ppKB kb = do
     putStrLn $ Pr.ppShow kb 
-    
+
+autoAttack :: Actor -> Actor -> Actor
+autoAttack actor@(Actor {stats = stats@(StatsSystem {physicalDamage = p, health = h}})) =
+    actor {stats = stats { health = h - p } }
+ 
 
 -- | Globals 
 -------------------------------------------------------------------------------

@@ -37,7 +37,8 @@ newDB1 = becomeFan1 "Andrew" "Catch Me If You Can" testDatabase
 becomeFan2 :: Fan -> Title -> (Database -> Database)
 becomeFan2 name title = over (at title) (fmap . over fans . Set.insert $ name)
 
-
+-- isFan :: Name -> String -> Setter Database Bool
+-- isFan name film = at film . mapped . fans . contains name
 
 
 catchMe = Map.lookup "Catch Me If You Can"
