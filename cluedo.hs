@@ -95,10 +95,9 @@ makeLenses ''KB
 {-
 addCardFact :: Card -> Ownership -> StateT KB IO ()
 addCardFact c o = do
-  lift $ putStrLn "adding a cardfact"
+  lift $ putStrLn "adding a cardfact" ++
   cf & at c .~ o 
 -}
-
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -138,6 +137,7 @@ ppKB kb = do
 -------------------------------------------------------------------------------
 d = allCards
 s = shuffleDeck d
+foo = initKB 6
 
 main = do
     putStrLn "How many players?"
