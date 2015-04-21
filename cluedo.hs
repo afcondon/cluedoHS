@@ -16,45 +16,6 @@ import qualified Data.Set as S
 import qualified Text.Show.Pretty as Pr
 
 
-----------------------------------------
-type Stack   = [Int]
-type Output  = [Int]
-type Program = [Instr]
-
-type VM a = ReaderT Program (WriterT Output (State Stack)) a
-
-newtype Comp a = Comp { unComp :: VM a }
-  deriving (Functor, Applicative, Monad, MonadReader Program, MonadWriter Output, MonadState Stack)
-
-data Instr = Push Int | Pop | Puts
-
-evalInstr :: Instr -> Comp ()
-evalInstr instr = case instr of
-  Pop    -> modify tail
-  Push n -> modify (n:)
-  Puts   -> do
-    tos <- gets head
-    tell [tos]
-
-eval :: Comp ()
-eval = do
-  instr <- ask
-  case instr of
-    []     -> return ()
-    (i:is) -> evalInstr i >> local (const is) eval
-
-execVM :: Program -> Output
-execVM = flip evalState [] . execWriterT . runReaderT (unComp eval)
-
-program :: Program
-program = [
-     Push 42,
-     Push 27,
-     Puts,
-     Pop,
-     Puts,
-     Pop
-  ]
 ---------------------------------------------------------------------
 -- | define the cards in the deck
 -------------------------------------------------------------------------------
@@ -122,16 +83,22 @@ type PlayerCards' = M.Map PlayerID CardSet
 type PlayerPassed = M.Map PlayerID SuggestionSet
 type PlayerMatched = M.Map PlayerID SuggestionSet
 
-data KB = KB { _cf :: CardFacts
-             , _pc :: PlayerCards   -- Map Player -> Set of Cards held
+data KB = KB { _cf  :: CardFacts
+             , _pc  :: PlayerCards   -- Map Player -> Set of Cards held
              , _pc' :: PlayerCards' -- Map Player -> Set of Cards _not_ held
-             , _pm :: PlayerMatched -- Map Player -> Set of Suggestions Matched
-             , _pm' :: PlayerPassed -- Map Player -> Set of Suggestions Passed
+             , _pm  :: PlayerMatched -- Map Player -> Set of Suggs Matched
+             , _pm' :: PlayerPassed -- Map Player -> Set of Suggs Passed
              } deriving (Show, Eq)
 
-type KBstate = State KB
-
 makeLenses ''KB
+
+{-
+addCardFact :: Card -> Ownership -> StateT KB IO ()
+addCardFact c o = do
+  lift $ putStrLn "adding a cardfact"
+  cf & at c .~ o 
+-}
+
 
 initCardFacts :: CardFacts
 initCardFacts = M.fromList (zip allCards (repeat Unknown))
@@ -148,16 +115,6 @@ initKB n = KB { _cf  = initCardFacts
               , _pc' = M.fromList $ zip [1..n] $ repeat initCardSet
               , _pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
               , _pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
-
-playerHasCard :: PlayerID -> Card -> KB -> KB
-playerHasCard pid card kb = over cf (M.insert card oid) kb
-    where
-        oid = ID pid
-
-playersCardSet :: PlayerID -> KB -> CardSet
-playersCardSet pid kb = 
-    where
-        oid = ID pid
 
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
@@ -176,10 +133,6 @@ ppKB :: KB -> IO ()
 ppKB kb = do
     putStrLn $ Pr.ppShow kb 
 
-autoAttack :: Actor -> Actor -> Actor
-autoAttack actor@(Actor {stats = stats@(StatsSystem {physicalDamage = p, health = h}})) =
-    actor {stats = stats { health = h - p } }
- 
 
 -- | Globals 
 -------------------------------------------------------------------------------
@@ -187,7 +140,6 @@ d = allCards
 s = shuffleDeck d
 
 main = do
-    mapM_ print $ execVM program
     putStrLn "How many players?"
     n <- readAInt -- number of players
     let ps = [1..n] :: [PlayerID]
@@ -201,6 +153,8 @@ main = do
     let passes = getPasses info
     let match = getMatch info 
     print info
+    let kb' = kb^.cf & at MS .~ Just Noone
+    print kb'
     let cfN = _cf kb
     let csn = M.lookup 1 (_pc kb)
     print csn
