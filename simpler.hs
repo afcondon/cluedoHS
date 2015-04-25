@@ -19,12 +19,10 @@ add2Map i c = myMap.at i .= (Just c)
 add2MapMultiple :: Map.Map Int Char -> State DB ()
 add2MapMultiple mmc = myMap <>= mmc
 
-{-
-add2MapMultiple2 :: Map.Map Int Char -> Map.Map Int Char -> State DB ()
-add2MapMultiple2 mmc1 mmc2 = do
-                        orig <- _myMap
-                        myMap .= orig <> mmc2
--}
+
+add2MapMultiple2 :: Map.Map Int Char -> State DB ()
+add2MapMultiple2 mmc = myMap %= (Map.union mmc)
+
 
 db = initDB
 foo = Map.fromList (zip [1..5] ['a'..'m']) :: Map.Map Int Char
@@ -34,5 +32,7 @@ main :: IO ()
 main = do
   let ndb = execState (add2Map 1 'z') db
   let ndb2 = execState (add2MapMultiple bar) ndb
+  let ndb3 = execState (add2MapMultiple2 bar) ndb
   print ndb
   print ndb2
+  print ndb3
