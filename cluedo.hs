@@ -11,8 +11,8 @@ import Control.Monad.Reader
 import Control.Monad.Writer
 import Control.Monad.State
 import Control.Lens
-import qualified Data.Map.Strict as M
-import qualified Data.Set as S
+import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import qualified Text.Show.Pretty as Pr
 
 
@@ -24,7 +24,6 @@ type Suggestion = (Card, Card, Card) -- constrained to be (s,w,p)
 type Hand = [Card]
 type Deck = [Card]
 type Shuffled = [Card]
-type IntCardTuple = (Int, Card)
 type PlayerID = Int
 type SuggestionBy = (PlayerID, Suggestion) -- actual suggestions are made by players
 
@@ -73,18 +72,19 @@ makeSuggestion s (h:hs) = testSuggestion s h : makeSuggestion s hs
 
 -- core information used for deduction and tracking
 -------------------------------------------------------------------------------
-type CardSet = S.Set Card
-type SuggestionSet = S.Set Suggestion
+type CardSet = Set.Set Card
+type SuggestionSet = Set.Set Suggestion
 data Ownership = Unknown | Noone | ID PlayerID deriving (Show, Eq)
 
-type CardFacts = M.Map Card Ownership
-type PlayerCards = M.Map PlayerID CardSet
-type PlayerCards' = M.Map PlayerID CardSet
-type PlayerPassed = M.Map PlayerID SuggestionSet
-type PlayerMatched = M.Map PlayerID SuggestionSet
+type CardFacts = Map.Map Card Ownership
+type PlayerCards = Map.Map PlayerID CardSet
+type PlayerCards' = Map.Map PlayerID CardSet
+type PlayerPassed = Map.Map PlayerID SuggestionSet
+type PlayerMatched = Map.Map PlayerID SuggestionSet
 
 data KB = KB { _cf  :: CardFacts
              , _pc  :: PlayerCards   -- Map Player -> Set of Cards held
+             , _pcl :: Map.Map PlayerID [Card]
              , _pc' :: PlayerCards' -- Map Player -> Set of Cards _not_ held
              , _pm  :: PlayerMatched -- Map Player -> Set of Suggs Matched
              , _pm' :: PlayerPassed -- Map Player -> Set of Suggs Passed
@@ -92,28 +92,26 @@ data KB = KB { _cf  :: CardFacts
 
 makeLenses ''KB
 
-{-
-addCardFact :: Card -> Ownership -> StateT KB IO ()
-addCardFact c o = do
-  lift $ putStrLn "adding a cardfact" ++
-  cf & at c .~ o 
--}
+
+addCardFact :: Card -> Ownership -> StateT KB
+addCardFact c o = cf.at c .= Just o
 
 initCardFacts :: CardFacts
-initCardFacts = M.fromList (zip allCards (repeat Unknown))
+initCardFacts = Map.fromList (zip allCards (repeat Unknown))
 
 initCardSet :: CardSet
-initCardSet = S.empty
+initCardSet = Set.empty
 
 initSuggestionSet :: SuggestionSet
-initSuggestionSet = S.empty
+initSuggestionSet = Set.empty
 
 initKB :: Int -> KB
 initKB n = KB { _cf  = initCardFacts
-              , _pc  = M.fromList $ zip [1..n] $ repeat initCardSet
-              , _pc' = M.fromList $ zip [1..n] $ repeat initCardSet
-              , _pm  = M.fromList $ zip [1..n] $ repeat initSuggestionSet
-              , _pm' = M.fromList $ zip [1..n] $ repeat initSuggestionSet }
+              , _pc  = Map.fromList $ zip [1..n] $ repeat initCardSet
+              , _pcl = Map.fromList $ zip [1..n] $ repeat []
+              , _pc' = Map.fromList $ zip [1..n] $ repeat initCardSet
+              , _pm  = Map.fromList $ zip [1..n] $ repeat initSuggestionSet
+              , _pm' = Map.fromList $ zip [1..n] $ repeat initSuggestionSet }
 
 getPasses :: [(Bool, PlayerID)] -> [PlayerID]
 getPasses info = map snd $ takeWhile (not . fst) info
@@ -156,10 +154,10 @@ main = do
     let kb' = kb^.cf & at MS .~ Just Noone
     print kb'
     let cfN = _cf kb
-    let csn = M.lookup 1 (_pc kb)
+    let csn = Map.lookup 1 (_pc kb)
     print csn
     let foo = case csn of Nothing -> initCardSet
-                          (Just c) -> S.insert MS c
+                          (Just c) -> Set.insert MS c
     print foo
     --print kb
     -- learnFromSuggestion firstS passes match

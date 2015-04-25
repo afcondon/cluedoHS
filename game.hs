@@ -3,12 +3,14 @@ import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
 import Control.Lens
+import qualified Data.Map.Strict as Map
 import qualified Text.Show.Pretty as Pr
 
 data Game = Game
     { _score :: Int
     , _units :: [Unit]
     , _boss  :: Unit
+    , _um :: Map.Map Int Char
     } deriving (Show)
 
 data Unit = Unit
@@ -46,6 +48,7 @@ initialState = Game
         { _health = 100
         , _position = Point { _x = 0.0, _y = 0.0 }
         }
+    , _um = Map.fromList [(1,'a'), (2,'b')]
     }
 ppGame :: Game -> IO ()
 ppGame game = putStrLn $ Pr.ppShow game 
@@ -72,6 +75,12 @@ newState :: game
 strike = do
     lift $ putStrLn "*shink*"
     bossHP -= 10
+{-
+mapmod :: StateT Game IO ()
+mapmod =  do 
+    lift $ putStrLn "mapmod"
+    um & at 4 ?~ 'g'     -- foo^.um & at 4 ?~ 'v' within execState
+-}
 
 partyHP :: Traversal' Game Int
 partyHP = units.traversed.health
@@ -116,6 +125,8 @@ battle = do
         zoom (boss.position) $ do
             x += 10
             y += 10
+
+foo = initialState
 
 main :: IO ()
 main = print "game begins"
