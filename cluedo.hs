@@ -128,12 +128,12 @@ addCardFact c o = cf.at c .= Just o
 addCardFacts :: CardFacts -> State KB ()
 addCardFacts cfs = cf %= (Map.union cfs)
 
-{-
 learnFromSuggestion :: Suggestion -> SuggestionResult -> State KB ()
-learnFromSuggestion sugg (ps,m) = pm' %= (Set.insert sugg)
-  where
-    fpm' = 
+learnFromSuggestion sugg (ps,m) = do
+  pm'.traversed %= (Set.insert sugg)
+  pm.traversed %= (Set.insert sugg)
 
+{-
 reviewCardFacts :: State KB () 
 
 reviewSuggestions :: State KB ()
@@ -160,7 +160,8 @@ main = do
     let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
     let firstS = head suggestions
-    let results = makeSuggestion firstS hs  -- not hs but hs-without-suggester
-    print results
+    let sResult = makeSuggestion firstS hs  -- not hs but hs-without-suggester
+    let results = execState (learnFromSuggestion firstS sResult) kb
+    ppKB results
     -- learnFromSuggestion firstS passes match
     print "all done!"
