@@ -122,28 +122,37 @@ initKB n = KB { _cf  = initCardFacts
 
 makeLenses ''KB
 
+ppKB :: KB -> IO ()
+ppKB kb = putStrLn $ Pr.ppShow kb 
+
+
 addCardFact :: Card -> Ownership -> State KB ()
 addCardFact c o = cf.at c .= Just o
 
 addCardFacts :: CardFacts -> State KB ()
 addCardFacts cfs = cf %= (Map.union cfs)
 
+{-
+passers :: [PlayerID] -> Traversal' PlayerPassed PlayerPassed
+passers ps = filtered (Map.member ps)
+
 learnFromSuggestion :: Suggestion -> SuggestionResult -> State KB ()
 learnFromSuggestion sugg (ps,m) = do
-  pm'.traversed %= (Set.insert sugg)
-  pm.traversed %= (Set.insert sugg)
+  pm'.traversed.(passers ps) %= (Set.union sugg)
 
-{-
 reviewCardFacts :: State KB () 
 
 reviewSuggestions :: State KB ()
 -}
 
-
-ppKB :: KB -> IO ()
-ppKB kb = do
-    putStrLn $ Pr.ppShow kb 
-
+solved :: KB -> Maybe Suggestion       -- should be an Either since there is distinct error condition
+solved kb =  case swp of
+            []        -> Nothing       -- no solution is found
+            (x:[])    -> Just x        -- single solution is found
+            otherwise -> Nothing       -- multiple solutions found, algo is broken  
+  where
+    cfs = Map.toList $ kb^.cf
+    swp = [ (s,w,p) | (s, Noone) <- cfs, (w, Noone) <- cfs, (p, Noone) <- cfs, elem s suspectCards, elem w weaponCards, elem p placeCards]
 
 -- | Globals 
 -------------------------------------------------------------------------------
@@ -161,7 +170,6 @@ main = do
     let hs = deal remainingCards n
     let firstS = head suggestions
     let sResult = makeSuggestion firstS hs  -- not hs but hs-without-suggester
-    let results = execState (learnFromSuggestion firstS sResult) kb
-    ppKB results
-    -- learnFromSuggestion firstS passes match
+    -- let results = execState (learnFromSuggestion firstS sResult) kb
+    -- ppKB results
     print "all done!"
