@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes      #-}
 import Control.Monad
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.State
@@ -53,15 +54,20 @@ initialState = Game
 ppGame :: Game -> IO ()
 ppGame game = putStrLn $ Pr.ppShow game 
 
-{-
--- this doesn't compile altho the original tutorial mentions problem
---  with filtered don't see why the signature would be wrong
 around :: Point -> Double -> Traversal' Unit Unit
 around center radius = filtered (\unit ->
     (unit^.position.x - center^.x)^2
   + (unit^.position.y - center^.y)^2
   < radius^2 )
--}
+
+partyHP :: Traversal' Game Int
+partyHP = units.traversed.health
+
+partyLoc :: Traversal' Game Point
+partyLoc = units.traversed.position
+
+php :: Traversal' Game Char
+php = um.traversed
 
 bossHP :: Lens' Game Int
 bossHP = boss.health
@@ -82,22 +88,10 @@ mapmod =  do
     um & at 4 ?~ 'g'     -- foo^.um & at 4 ?~ 'v' within execState
 -}
 
-partyHP :: Traversal' Game Int
-partyHP = units.traversed.health
-
-fireBreath :: StateT Game IO ()
-fireBreath = do
-    lift $ putStrLn "*rawr*"
-    units.traversed.health -= 3
-{-
 fireBreath :: Point -> StateT Game IO ()
 fireBreath target = do
     lift $ putStrLn "*rawr*"
     units.traversed.(around target 1.0).health -= 3
--}
-
-partyLoc :: Traversal' Game Point
-partyLoc = units.traversed.position
 
 retreat :: StateT Game IO ()
 retreat = do
@@ -114,8 +108,7 @@ battle = do
         strike
 
     -- The dragon awakes!
-    -- fireBreath (Point 0.5 1.5)
-    fireBreath
+    fireBreath (Point 0.5 1.5)
     
     replicateM_ 3 $ do
         -- The better part of valor
