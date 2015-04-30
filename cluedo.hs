@@ -43,6 +43,17 @@ shuffle as = snd $ unzip slist
 readAInt :: IO Int
 readAInt = readLn
 
+-- StackOverflow solution by cchambers 
+-- http://stackoverflow.com/questions/29924256
+keys :: Ord k => [k] -> IndexedTraversal' k (Map.Map k a) a
+keys ks f m = go ks
+  where
+    go []     = pure m
+    go (i:is) =
+      case Map.lookup i m of
+        Just a  -> Map.insert i <$> indexed f i a <*> go is
+        Nothing -> go is
+
 -- | typed functions / equations
 shuffleDeck :: Deck -> Shuffled
 shuffleDeck d = shuffle d
