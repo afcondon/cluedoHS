@@ -1,6 +1,9 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE TemplateHaskell            #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE RankNTypes                 #-}
+
 
 import Data.Ord
 import Data.List
@@ -88,7 +91,7 @@ evalSuggestion _ [] = []
 evalSuggestion s (h:hs) = testSuggestion s h : evalSuggestion s hs
 
 makeSuggestion :: Suggestion -> [Hand] -> SuggestionResult
-makeSuggestion s hs = (passes, match)
+makeSuggestion s hs = (s, match, passes)
   where
     results = zip (evalSuggestion s hs) [1..(length hs)]
     passes = getPasses results
@@ -106,7 +109,7 @@ type PlayerCards = Map.Map PlayerID CardSet
 type PlayerCards' = Map.Map PlayerID CardSet
 type PlayerPassed = Map.Map PlayerID SuggestionSet
 type PlayerMatched = Map.Map PlayerID SuggestionSet
-type SuggestionResult = ([PlayerID], Maybe PlayerID)
+type SuggestionResult = (Suggestion, Maybe PlayerID, [PlayerID])
 
 initCardFacts :: CardFacts
 initCardFacts = Map.fromList (zip allCards (repeat Unknown))
@@ -118,10 +121,13 @@ initSuggestionSet :: SuggestionSet
 initSuggestionSet = Set.empty
 
 passers :: SuggestionResult -> [PlayerID]
-passers (pids, _) = pids
+passers (_,_,pids) = pids
 
 match :: SuggestionResult -> Maybe PlayerID
-match (_, mm) = mm
+match (_, mm, _) = mm
+
+sugg :: SuggestionResult -> Suggestion
+sugg (s,_,_) = s
 
 data KB = KB { _cf  :: CardFacts
              , _pc  :: PlayerCards   -- Map Player -> Set of Cards held
@@ -148,18 +154,25 @@ addCardFact c o = cf.at c .= Just o
 addCardFacts :: CardFacts -> State KB ()
 addCardFacts cfs = cf %= (Map.union cfs)
 
-{-
-learnFromSuggestion :: Suggestion -> SuggestionResult -> State KB ()
-learnFromSuggestion sugg (ps,m) = do
-  pm'.traversed.traversed %= _ -- (Set.union sugg)
--}
-addPassers :: SuggestionResult -> Suggestion -> KB -> PlayerPassed
-addPassers sr sugg kb = Map.fromList pl
-  where
-    ixes = passers sr                 -- generate indexes to filter
-    pl = Map.toList $ kb^.pm          -- destructure to list
-    plf = [(pid,ss) | (pid,ss) <- pl, elem pid ixes]
+-- specific to map pm', needs parameterization
 
+updateSuggestionSets :: [Int] -> Suggestion -> State KB ()
+updateSuggestionSets is s = traverseSuggestionSet' is %= Set.insert s
+  where
+    traverseSuggestionSet' :: [Int] -> IndexedTraversal' Int KB SuggestionSet
+    traverseSuggestionSet' is = pm' . keys is
+    
+
+learnFromSuggestion :: SuggestionResult -> State KB ()
+learnFromSuggestion (s,m,ps) = do
+  updateSuggestionSets ps s
+{-
+  -- pm += m
+  -- pm'[ps] += s
+-}
+
+addPassers :: SuggestionResult -> KB -> PlayerPassed
+addPassers = undefined
 
 reviewCardFacts :: State KB ()
 reviewCardFacts = undefined
@@ -203,6 +216,6 @@ main = do
     let hs = deal remainingCards n
     let firstS = head suggestions
     let sResult = makeSuggestion firstS hs  -- not hs but hs-without-suggester
-    -- let results = execState (learnFromSuggestion firstS sResult) kb
-    -- ppKB results
+    let results = execState (learnFromSuggestion sResult) kb
+    ppKB results
     print "all done!"
