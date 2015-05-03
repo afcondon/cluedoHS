@@ -90,8 +90,8 @@ evalSuggestion :: Suggestion -> [Hand] -> [Bool]
 evalSuggestion _ [] = []
 evalSuggestion s (h:hs) = testSuggestion s h : evalSuggestion s hs
 
-makeSuggestion :: Suggestion -> [Hand] -> SuggestionResult
-makeSuggestion s hs = (s, match, passes)
+makeSuggestion :: [Hand] -> Suggestion -> SuggestionResult
+makeSuggestion hs s = (s, match, passes)
   where
     results = zip (evalSuggestion s hs) [1..(length hs)]
     passes = getPasses results
@@ -168,6 +168,9 @@ learnFromSuggestion (s,Just m, ps) = do
   addPassers ps s
   addMatch m s
 
+learnFromSuggestions :: [SuggestionResult] -> State KB ()
+learnFromSuggestions srs = mapM_ learnFromSuggestion srs
+
 reviewCardFacts :: State KB ()
 reviewCardFacts = undefined
 
@@ -192,13 +195,8 @@ mc' = murderCards s
 rc' = removeMurderCards mc' s
 hs' = deal rc' 6
 fs' = head suggestions
-sr' = makeSuggestion fs' hs'
-ixes = passers sr'
-mypl = Map.toList $ kb'^.pm
-plf = [(pid,ss) | (pid,ss) <- mypl, elem pid ixes]
-plfm :: PlayerPassed
-plfm = Map.fromList plf
-
+sr' = makeSuggestion hs' fs'
+srs = map (makeSuggestion hs') suggestions
 
 main = do
     putStrLn "How many players?"
@@ -209,7 +207,9 @@ main = do
     let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
     let firstS = head suggestions
-    let sResult = makeSuggestion firstS hs  -- not hs but hs-without-suggester
-    let results = execState (learnFromSuggestion sResult) kb
-    ppKB results
+    let sResult = makeSuggestion hs firstS  -- not hs but hs-without-suggester
+    let srs = map (makeSuggestion hs') suggestions
+    -- let results = execState (learnFromSuggestion sResult) kb
+    let kb' = execState (learnFromSuggestions srs) kb
+    ppKB kb'
     print "all done!"
