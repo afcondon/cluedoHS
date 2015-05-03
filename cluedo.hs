@@ -4,7 +4,6 @@
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE RankNTypes                 #-}
 
-
 import Data.Ord
 import Data.List
 import Data.List.Split
@@ -15,7 +14,6 @@ import Control.Lens
 import qualified Data.Map.Strict as Map
 import qualified Data.Set as Set
 import qualified Text.Show.Pretty as Pr
-
 
 ---------------------------------------------------------------------
 -- | define the cards in the deck
@@ -57,6 +55,7 @@ keys ks f m = go ks
         Just a  -> Map.insert i <$> indexed f i a <*> go is
         Nothing -> go is
 
+-------------------------------------------------------------------------------
 -- | typed functions / equations
 shuffleDeck :: Deck -> Shuffled
 shuffleDeck d = shuffle d
@@ -120,15 +119,6 @@ initCardSet = Set.empty
 initSuggestionSet :: SuggestionSet
 initSuggestionSet = Set.empty
 
-passers :: SuggestionResult -> [PlayerID]
-passers (_,_,pids) = pids
-
-match :: SuggestionResult -> Maybe PlayerID
-match (_, mm, _) = mm
-
-sugg :: SuggestionResult -> Suggestion
-sugg (s,_,_) = s
-
 data KB = KB { _cf  :: CardFacts
              , _pc  :: PlayerCards   -- Map Player -> Set of Cards held
              , _pc' :: PlayerCards' -- Map Player -> Set of Cards _not_ held
@@ -154,28 +144,32 @@ addCardFact c o = cf.at c .= Just o
 addCardFacts :: CardFacts -> State KB ()
 addCardFacts cfs = cf %= (Map.union cfs)
 
--- specific to map pm', needs parameterization
-
 addPassers :: [PlayerID] -> Suggestion -> State KB ()
-addPassers is s = pm' . keys is %= Set.insert s    
+addPassers is s = pm' . keys is %= Set.insert s
+
+addCards' :: [PlayerID] -> Suggestion -> State KB ()
+addCards' is (s,w,p) = pc' . keys is %= Set.union suggAsSet
+  where
+    suggAsSet = Set.fromList [s,w,p]
 
 addMatch :: PlayerID -> Suggestion -> State KB ()
 addMatch m s = pm . ix m %= Set.insert s    
 
 learnFromSuggestion :: SuggestionResult -> State KB ()
-learnFromSuggestion (s,Nothing,ps) = addPassers ps s
+learnFromSuggestion (s,Nothing,ps) = do
+  addPassers ps s
+  addCards' ps s
 learnFromSuggestion (s,Just m, ps) = do
   addPassers ps s
+  addCards' ps s
   addMatch m s
 
 learnFromSuggestions :: [SuggestionResult] -> State KB ()
 learnFromSuggestions srs = mapM_ learnFromSuggestion srs
 
-reviewCardFacts :: State KB ()
-reviewCardFacts = undefined
+deductions :: State KB ()
+deductions = undefined
 
-reviewSuggestions :: State KB ()
-reviewSuggestions = undefined
 
 solved :: KB -> Maybe Suggestion       -- should be an Either since there is distinct error condition
 solved kb =  case swp of
@@ -207,9 +201,8 @@ main = do
     let remainingCards = removeMurderCards mc s
     let hs = deal remainingCards n
     let firstS = head suggestions
-    let sResult = makeSuggestion hs firstS  -- not hs but hs-without-suggester
+    let sResult = makeSuggestion hs firstS    -- should be hs-without-suggester, also rotated
     let srs = map (makeSuggestion hs') suggestions
-    -- let results = execState (learnFromSuggestion sResult) kb
     let kb' = execState (learnFromSuggestions srs) kb
     ppKB kb'
     print "all done!"
