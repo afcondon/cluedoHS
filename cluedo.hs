@@ -144,8 +144,10 @@ addCardFact c o = cf.at c .= Just o
 addCardFacts :: CardFacts -> State KB ()
 addCardFacts cfs = cf %= (Map.union cfs)
 
-addPassers :: [PlayerID] -> Suggestion -> State KB ()
-addPassers is s = pm' . keys is %= Set.insert s
+addPassers :: [PlayerID] -> Suggestion -> State KB ()     -- passers definitely don't have any of the cards in suggestion
+addPassers is (s,w,p) = do 
+  pm' . keys is %= Set.insert (s,w,p)                     -- add the suggestion to their passes list
+  pc' . keys is %= Set.union (Set.fromList [s,w,p])       -- add the cards to their "cards not held" list
 
 addCards' :: [PlayerID] -> Suggestion -> State KB ()
 addCards' is (s,w,p) = pc' . keys is %= Set.union suggAsSet
@@ -156,20 +158,16 @@ addMatch :: PlayerID -> Suggestion -> State KB ()
 addMatch m s = pm . ix m %= Set.insert s    
 
 learnFromSuggestion :: SuggestionResult -> State KB ()
-learnFromSuggestion (s,Nothing,ps) = do
+learnFromSuggestion (s, Nothing, ps) = do
   addPassers ps s
   addCards' ps s
-learnFromSuggestion (s,Just m, ps) = do
+learnFromSuggestion (s, Just m, ps) = do
   addPassers ps s
   addCards' ps s
   addMatch m s
 
 learnFromSuggestions :: [SuggestionResult] -> State KB ()
 learnFromSuggestions srs = mapM_ learnFromSuggestion srs
-
-deductions :: State KB ()
-deductions = undefined
-
 
 solved :: KB -> Maybe Suggestion       -- should be an Either since there is distinct error condition
 solved kb =  case swp of
@@ -191,6 +189,7 @@ hs' = deal rc' 6
 fs' = head suggestions
 sr' = makeSuggestion hs' fs'
 srs = map (makeSuggestion hs') suggestions
+final = execState (learnFromSuggestions srs) kb'
 
 main = do
     putStrLn "How many players?"
