@@ -156,7 +156,7 @@ addCardFacts cfs = cf %= (Map.union cfs)
 
 -- specific to map pm', needs parameterization
 
-addPassers :: [Int] -> Suggestion -> State KB ()
+addPassers :: [PlayerID] -> Suggestion -> State KB ()
 addPassers is s = pm' . keys is %= Set.insert s    
 
 addMatch :: PlayerID -> Suggestion -> State KB ()
@@ -164,7 +164,7 @@ addMatch m s = pm . ix m %= Set.insert s
 
 learnFromSuggestion :: SuggestionResult -> State KB ()
 learnFromSuggestion (s,Nothing,ps) = addPassers ps s
-learnFromSuggestion (s,Just m,ps) = do
+learnFromSuggestion (s,Just m, ps) = do
   addPassers ps s
   addMatch m s
 
