@@ -7,6 +7,7 @@
 import Data.Ord
 import Data.List
 import Data.List.Split
+import Data.Maybe (catMaybes)
 import Data.Function (on)
 import System.Random
 import Control.Monad.State
@@ -144,26 +145,43 @@ addCardFact c o = cf.at c .= Just o
 addCardFacts :: CardFacts -> State KB ()
 addCardFacts cfs = cf %= (Map.union cfs)
 
+analyseOneMatch :: CardSet -> CardSet -> Suggestion -> Maybe Card
+analyseOneMatch cs cs' (s,w,p) 
+    | (sb || wb || pb) = Nothing
+    | (wb' && pb') = Just s
+    | (sb' && pb') = Just w
+    | (sb' && wb') = Just p
+    | otherwise     = Nothing
+    where
+        sb = Set.member s cs
+        wb = Set.member w cs
+        pb = Set.member p cs
+        sb' = Set.member s cs'
+        wb' = Set.member w cs'
+        pb' = Set.member p cs'
+
+-- function to analyse one players matched suggestions to see if something can be learnt
+deduceFromMatches :: CardSet -> CardSet -> SuggestionSet  -> [Card]  
+deduceFromMatches doHave dontHave matches = deductions
+  where
+    deductions = catMaybes $ Set.toList $ Set.map (analyseOneMatch doHave dontHave) matches
+
+deduceForPlayer :: PlayerID -> KB -> [Card]
+deduceForPlayer pid kb = deduceFromMatches (kb^.pc.ix pid) (kb^.pc'.ix pid) (kb^.pm.ix pid)
+
 addPassers :: [PlayerID] -> Suggestion -> State KB ()     -- passers definitely don't have any of the cards in suggestion
 addPassers is (s,w,p) = do 
   pm' . keys is %= Set.insert (s,w,p)                     -- add the suggestion to their passes list
   pc' . keys is %= Set.union (Set.fromList [s,w,p])       -- add the cards to their "cards not held" list
 
-addCards' :: [PlayerID] -> Suggestion -> State KB ()
-addCards' is (s,w,p) = pc' . keys is %= Set.union suggAsSet
-  where
-    suggAsSet = Set.fromList [s,w,p]
-
 addMatch :: PlayerID -> Suggestion -> State KB ()
-addMatch m s = pm . ix m %= Set.insert s    
+addMatch m s = pm . ix m %= Set.insert s                               -- add to list of suggestions matched
 
 learnFromSuggestion :: SuggestionResult -> State KB ()
 learnFromSuggestion (s, Nothing, ps) = do
   addPassers ps s
-  addCards' ps s
 learnFromSuggestion (s, Just m, ps) = do
   addPassers ps s
-  addCards' ps s
   addMatch m s
 
 learnFromSuggestions :: [SuggestionResult] -> State KB ()
