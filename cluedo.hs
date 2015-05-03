@@ -156,23 +156,17 @@ addCardFacts cfs = cf %= (Map.union cfs)
 
 -- specific to map pm', needs parameterization
 
-updateSuggestionSets :: [Int] -> Suggestion -> State KB ()
-updateSuggestionSets is s = traverseSuggestionSet' is %= Set.insert s
-  where
-    traverseSuggestionSet' :: [Int] -> IndexedTraversal' Int KB SuggestionSet
-    traverseSuggestionSet' is = pm' . keys is
-    
+addPassers :: [Int] -> Suggestion -> State KB ()
+addPassers is s = pm' . keys is %= Set.insert s    
+
+addMatch :: PlayerID -> Suggestion -> State KB ()
+addMatch m s = pm . ix m %= Set.insert s    
 
 learnFromSuggestion :: SuggestionResult -> State KB ()
-learnFromSuggestion (s,m,ps) = do
-  updateSuggestionSets ps s
-{-
-  -- pm += m
-  -- pm'[ps] += s
--}
-
-addPassers :: SuggestionResult -> KB -> PlayerPassed
-addPassers = undefined
+learnFromSuggestion (s,Nothing,ps) = addPassers ps s
+learnFromSuggestion (s,Just m,ps) = do
+  addPassers ps s
+  addMatch m s
 
 reviewCardFacts :: State KB ()
 reviewCardFacts = undefined
