@@ -174,27 +174,26 @@ deduceForPlayer :: PlayerID -> KB -> [Card]
 deduceForPlayer pid kb = deduceFromMatches (kb^.pc.ix pid) (kb^.pc'.ix pid) (kb^.pm.ix pid)
 
 addPassers :: [PlayerID] -> Suggestion -> State KB ()     -- passers definitely don't have any of the cards in suggestion
-addPassers is (s,w,p) = do 
+addPassers    is            (s,w,p)    =  do 
   pm' . keys is %= Set.insert (s,w,p)                     -- add the suggestion to their passes list
   pc' . keys is %= Set.union (Set.fromList [s,w,p])       -- add the cards to their "cards not held" list
 
-filteredIndex :: PlayerID -> PlayerCards -> [PlayerID]
-filteredIndex pid pids = filter (/= pid) $ [1..n]
-  where
-    n = Map.size pids
+filteredIndex :: PlayerID -> Int -> [PlayerID]
+filteredIndex    pid         n   =  filter (/= pid) $ [1..n]
 
-cardOwnerIdentified :: PlayerID -> Card -> State KB ()
-cardOwnerIdentified pid c = do
-  pc . ix pid                        %= Set.insert c          -- this player has the card
-  pc' . keys (filteredIndex pid pc)  %= Set.insert c          -- ergo, other players don't
+cardOwnerIdentified :: PlayerID -> Maybe Card -> State KB ()
+cardOwnerIdentified    _           Nothing    = pc . ix 1 %= Set.union (Set.empty :: CardSet)
+cardOwnerIdentified    pid         (Just c)   = do
+  mykb <- get
+  pc . ix pid                       %= Set.insert c          -- this player has the card
+  pc' . keys (filteredIndex pid (mykb^.count))  %= Set.insert c          -- ergo, other players don't
 
 addMatch :: PlayerID -> Suggestion -> State KB ()
-addMatch m s = do
-  pm . ix m %= Set.insert s                                 -- add to list of suggestions matched
-  -- where
-  --   has = (pc . ix m) :: CardSet
-  --   hasnt = (pc' . ix m) :: CardSet
-  --   c = analyseOneMatch has hasnt s                      -- if Just C then cardOwnerIdentified m c
+addMatch    pid         s          =  do
+  mykb <- get
+  let c = analyseOneMatch (mykb^.pc.ix pid) (mykb^.pc'.ix pid) s     -- if Just C then cardOwnerIdentified m c 
+  cardOwnerIdentified pid c  
+  pm . ix pid %= Set.insert s                                 -- add to list of suggestions matched
 
 learnFromSuggestion :: SuggestionResult -> State KB ()    -- how can i remove the pattern match here?
 learnFromSuggestion (s, Nothing, ps) = do
