@@ -122,9 +122,10 @@ initSuggestionSet = Set.empty
 
 data KB = KB { _cf  :: CardFacts
              , _pc  :: PlayerCards   -- Map Player -> Set of Cards held
-             , _pc' :: PlayerCards' -- Map Player -> Set of Cards _not_ held
+             , _pc' :: PlayerCards'  -- Map Player -> Set of Cards _not_ held
              , _pm  :: PlayerMatched -- Map Player -> Set of Suggs Matched
-             , _pm' :: PlayerPassed -- Map Player -> Set of Suggs Passed
+             , _pm' :: PlayerPassed  -- Map Player -> Set of Suggs Passed
+             , _count :: Int
              } deriving (Show, Eq)
 
 initKB :: Int -> KB
@@ -132,7 +133,9 @@ initKB n = KB { _cf  = initCardFacts
               , _pc  = Map.fromList $ zip [1..n] $ repeat initCardSet
               , _pc' = Map.fromList $ zip [1..n] $ repeat initCardSet
               , _pm  = Map.fromList $ zip [1..n] $ repeat initSuggestionSet
-              , _pm' = Map.fromList $ zip [1..n] $ repeat initSuggestionSet }
+              , _pm' = Map.fromList $ zip [1..n] $ repeat initSuggestionSet
+              , _count = n
+              }
 
 makeLenses ''KB
 
@@ -140,14 +143,15 @@ ppKB :: KB -> IO ()
 ppKB kb = putStrLn $ Pr.ppShow kb 
 
 addCardFact :: Card -> Ownership -> State KB ()
-addCardFact c o = cf.at c .= Just o
+addCardFact    c       o         =  cf.at c .= Just o
 
-addCardFacts :: CardFacts -> State KB ()
-addCardFacts cfs = cf %= (Map.union cfs)
+addCardFacts :: CardFacts        -> State KB ()
+addCardFacts    cfs              =  cf %= (Map.union cfs)
 
+-- any individual match can yield a Card IFF two cards are not held
 analyseOneMatch :: CardSet -> CardSet -> Suggestion -> Maybe Card
 analyseOneMatch cs cs' (s,w,p) 
-    | (sb || wb || pb) = Nothing
+    | (sb || wb || pb) = Nothing      -- because if we already have any one we can't deduce anything
     | (wb' && pb') = Just s
     | (sb' && pb') = Just w
     | (sb' && wb') = Just p
@@ -174,10 +178,25 @@ addPassers is (s,w,p) = do
   pm' . keys is %= Set.insert (s,w,p)                     -- add the suggestion to their passes list
   pc' . keys is %= Set.union (Set.fromList [s,w,p])       -- add the cards to their "cards not held" list
 
-addMatch :: PlayerID -> Suggestion -> State KB ()
-addMatch m s = pm . ix m %= Set.insert s                               -- add to list of suggestions matched
+filteredIndex :: PlayerID -> PlayerCards -> [PlayerID]
+filteredIndex pid pids = filter (/= pid) $ [1..n]
+  where
+    n = Map.size pids
 
-learnFromSuggestion :: SuggestionResult -> State KB ()
+cardOwnerIdentified :: PlayerID -> Card -> State KB ()
+cardOwnerIdentified pid c = do
+  pc . ix pid                        %= Set.insert c          -- this player has the card
+  pc' . keys (filteredIndex pid pc)  %= Set.insert c          -- ergo, other players don't
+
+addMatch :: PlayerID -> Suggestion -> State KB ()
+addMatch m s = do
+  pm . ix m %= Set.insert s                                 -- add to list of suggestions matched
+  -- where
+  --   has = (pc . ix m) :: CardSet
+  --   hasnt = (pc' . ix m) :: CardSet
+  --   c = analyseOneMatch has hasnt s                      -- if Just C then cardOwnerIdentified m c
+
+learnFromSuggestion :: SuggestionResult -> State KB ()    -- how can i remove the pattern match here?
 learnFromSuggestion (s, Nothing, ps) = do
   addPassers ps s
 learnFromSuggestion (s, Just m, ps) = do
