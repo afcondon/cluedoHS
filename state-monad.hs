@@ -21,6 +21,12 @@ addToSet n = do
     put (S.insert n s)
     return s
 
+foo :: State [Int] StateSet
+foo = do
+    is <- get
+    modify (take 2)
+    return $ S.fromList is
+
 main = do
     print $ evalState inc 1
     print $ execState inc 1
