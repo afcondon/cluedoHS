@@ -13,6 +13,18 @@ incBy x = do
     modify (+x)
     return n
 
+recurringIncBy :: Int -> State Int Int
+recurringIncBy x = do
+    n <- get
+    modify (+x)
+    modify (+x)
+    return n
+
+recursingInc :: State Int Int
+recursingInc = do
+    n <- get
+    if (n == 0) then return 1 else return $ (+ 2) $ execState recursingInc (n - 1) 
+
 type StateSet = S.Set Int
 
 addToSet :: Int -> State StateSet StateSet
@@ -34,4 +46,8 @@ main = do
     print $ runState (withState (+3) inc) 1
     print $ runState (mapState (\(a, s) -> (a + 3, s + 4)) inc) 1
 
-    print $ runState (incBy 5) 10
+    print $ (flip runState) 0  $ do
+        incBy 1
+        incBy 2
+        incBy 3
+

@@ -3,7 +3,6 @@ Player must have one card of any suggestion they matched
     ergo forall suggestions if two of the cards in a match are definitely not held third one is held
 
 if you learn that a player doesn't have a card then you check their matches to see if there's information in that
-if you learn that a player does have a card
 
 -- would it be better to produce card facts here? probably many ways to skin the cat
 deduceCard :: Suggestion -> CardSet -> CardSet -> Maybe Card
